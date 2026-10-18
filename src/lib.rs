@@ -4,6 +4,8 @@
 pub mod cmd;
 pub mod config;
 pub mod error;
+pub mod http;
+pub mod metrics;
 pub mod mib;
 #[cfg(feature = "mibs")]
 pub mod mib_dump;

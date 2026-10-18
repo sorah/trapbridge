@@ -27,7 +27,7 @@ pub struct Trap {
     pub received_at: std::time::SystemTime,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Version {
     V1,
@@ -35,7 +35,7 @@ pub enum Version {
     V3,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PduType {
     Trap,
@@ -142,9 +142,7 @@ impl Trap {
             snmp2::MessageType::TrapV1 | snmp2::MessageType::Trap => PduType::Trap,
             snmp2::MessageType::InformRequest => PduType::Inform,
             other => {
-                return Err(crate::Error::Protocol(format!(
-                    "unexpected PDU type {other:?}"
-                )));
+                return Err(crate::Error::Unsupported(format!("PDU type {other:?}")));
             }
         };
 

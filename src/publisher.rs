@@ -7,12 +7,16 @@ const MAX_BATCH_ENTRIES: usize = 10;
 const MAX_REQUEST_BYTES: usize = 256 * 1024;
 /// How long to wait for more traps before sending a partial batch.
 const LINGER: std::time::Duration = std::time::Duration::from_millis(200);
+/// `error_code` label for events that could not be serialized.
+const ERROR_CODE_SERIALIZE: &str = "Serialize";
+/// `error_code` label for events over the EventBridge size limit.
+const ERROR_CODE_TOO_LARGE: &str = "TooLarge";
 
 /// Where events go.
 #[derive(Debug)]
 pub enum Publisher {
     EventBridge(EventBridgePublisher),
-    Stdout,
+    Stdout(std::sync::Arc<crate::metrics::Metrics>),
 }
 
 impl Publisher {
@@ -35,11 +39,17 @@ impl Publisher {
     async fn publish(&self, traps: Vec<crate::trap::Trap>) {
         match self {
             Publisher::EventBridge(p) => p.publish(traps).await,
-            Publisher::Stdout => {
+            Publisher::Stdout(metrics) => {
                 for trap in traps {
                     match serde_json::to_string(&trap) {
-                        Ok(json) => println!("{json}"),
-                        Err(e) => tracing::error!(error = %e, "failed to serialize trap"),
+                        Ok(json) => {
+                            println!("{json}");
+                            metrics.events_put(1);
+                        }
+                        Err(e) => {
+                            metrics.events_failed(ERROR_CODE_SERIALIZE);
+                            tracing::error!(error = %e, "failed to serialize trap");
+                        }
                     }
                 }
             }
@@ -53,6 +63,7 @@ pub struct EventBridgePublisher {
     event_bus: String,
     source: String,
     detail_type: String,
+    metrics: std::sync::Arc<crate::metrics::Metrics>,
 }
 
 impl EventBridgePublisher {
@@ -61,12 +72,14 @@ impl EventBridgePublisher {
         event_bus: String,
         source: String,
         detail_type: String,
+        metrics: std::sync::Arc<crate::metrics::Metrics>,
     ) -> Self {
         Self {
             client,
             event_bus,
             source,
             detail_type,
+            metrics,
         }
     }
 
@@ -75,12 +88,18 @@ impl EventBridgePublisher {
         for trap in &traps {
             match self.entry(trap) {
                 Ok(entry) => entries.push(entry),
-                Err(e) => tracing::error!(
-                    error = %e,
-                    trap = trap.trap.oid,
-                    source = %trap.source.address,
-                    "dropping trap"
-                ),
+                Err(e) => {
+                    self.metrics.events_failed(match e {
+                        crate::Error::EventTooLarge { .. } => ERROR_CODE_TOO_LARGE,
+                        _ => ERROR_CODE_SERIALIZE,
+                    });
+                    tracing::error!(
+                        error = %e,
+                        trap = trap.trap.oid,
+                        source = %trap.source.address,
+                        "dropping trap"
+                    );
+                }
             }
         }
         for chunk in Self::split_by_size(entries) {
@@ -104,9 +123,10 @@ impl EventBridgePublisher {
             .build();
         let size = Self::entry_size(&entry);
         if size > MAX_REQUEST_BYTES {
-            return Err(crate::Error::Other(format!(
-                "event is {size} bytes, over the {MAX_REQUEST_BYTES} byte EventBridge limit"
-            )));
+            return Err(crate::Error::EventTooLarge {
+                size,
+                limit: MAX_REQUEST_BYTES,
+            });
         }
         Ok(entry)
     }
@@ -155,6 +175,7 @@ impl EventBridgePublisher {
         tracing::warn!(count = failed.len(), "retrying failed PutEvents entries");
         let retry = failed.into_iter().map(|(entry, _, _)| entry).collect();
         for (_, code, message) in self.put(retry).await {
+            self.metrics.events_failed(&code);
             tracing::error!(
                 error_code = code,
                 error_message = message,
@@ -172,13 +193,14 @@ impl EventBridgePublisher {
         String,
         String,
     )> {
+        let count = entries.len();
         let result = self
             .client
             .put_events()
             .set_entries(Some(entries.clone()))
             .send()
             .await;
-        match result {
+        let failed = match result {
             Ok(output) if output.failed_entry_count() == 0 => {
                 tracing::debug!(count = entries.len(), "put events");
                 vec![]
@@ -203,7 +225,9 @@ impl EventBridgePublisher {
                     .map(|entry| (entry, "RequestFailed".to_owned(), message.clone()))
                     .collect()
             }
-        }
+        };
+        self.metrics.events_put(count - failed.len());
+        failed
     }
 }
 
@@ -230,12 +254,16 @@ mod tests {
         }
     }
 
-    fn publisher(client: aws_sdk_eventbridge::Client) -> crate::publisher::EventBridgePublisher {
+    fn publisher(
+        client: aws_sdk_eventbridge::Client,
+        metrics: std::sync::Arc<crate::metrics::Metrics>,
+    ) -> crate::publisher::EventBridgePublisher {
         crate::publisher::EventBridgePublisher::new(
             client,
             "bus".to_owned(),
             "trapbridge".to_owned(),
             "SNMP Trap".to_owned(),
+            metrics,
         )
     }
 
@@ -253,8 +281,13 @@ mod tests {
             aws_smithy_mocks::RuleMode::MatchAny,
             [&rule]
         );
-        publisher(client).publish((0..15).map(trap).collect()).await;
+        let metrics = std::sync::Arc::new(crate::metrics::Metrics::new());
+        publisher(client, metrics.clone())
+            .publish((0..15).map(trap).collect())
+            .await;
         assert_eq!(rule.num_calls(), 2);
+        let text = metrics.encode().unwrap();
+        assert!(text.contains("trapbridge_events_put_total 15\n"), "{text}");
     }
 
     #[tokio::test]
@@ -293,9 +326,65 @@ mod tests {
             aws_smithy_mocks::RuleMode::MatchAny,
             [&partial, &retry]
         );
-        publisher(client).publish(vec![trap(0), trap(1)]).await;
+        let metrics = std::sync::Arc::new(crate::metrics::Metrics::new());
+        publisher(client, metrics.clone())
+            .publish(vec![trap(0), trap(1)])
+            .await;
         assert_eq!(partial.num_calls(), 1);
         assert_eq!(retry.num_calls(), 1);
+        let text = metrics.encode().unwrap();
+        assert!(text.contains("trapbridge_events_put_total 2\n"), "{text}");
+        assert!(!text.contains("trapbridge_events_failed_total{"), "{text}");
+    }
+
+    #[tokio::test]
+    async fn publish_counts_entries_failed_after_retry() {
+        let rule =
+            aws_smithy_mocks::mock!(aws_sdk_eventbridge::Client::put_events).then_output(|| {
+                aws_sdk_eventbridge::operation::put_events::PutEventsOutput::builder()
+                    .failed_entry_count(1)
+                    .entries(
+                        aws_sdk_eventbridge::types::PutEventsResultEntry::builder()
+                            .error_code("ThrottlingException")
+                            .build(),
+                    )
+                    .build()
+            });
+        let client = aws_smithy_mocks::mock_client!(
+            aws_sdk_eventbridge,
+            aws_smithy_mocks::RuleMode::MatchAny,
+            [&rule]
+        );
+        let metrics = std::sync::Arc::new(crate::metrics::Metrics::new());
+        publisher(client, metrics.clone())
+            .publish(vec![trap(0)])
+            .await;
+        assert_eq!(rule.num_calls(), 2);
+        let text = metrics.encode().unwrap();
+        assert!(text.contains("trapbridge_events_put_total 0\n"), "{text}");
+        assert!(
+            text.contains("trapbridge_events_failed_total{error_code=\"ThrottlingException\"} 1\n"),
+            "{text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn publish_counts_oversized_event_as_too_large() {
+        let rule =
+            aws_smithy_mocks::mock!(aws_sdk_eventbridge::Client::put_events).then_output(|| {
+                aws_sdk_eventbridge::operation::put_events::PutEventsOutput::builder().build()
+            });
+        let client = aws_smithy_mocks::mock_client!(aws_sdk_eventbridge, [&rule]);
+        let metrics = std::sync::Arc::new(crate::metrics::Metrics::new());
+        let mut t = trap(0);
+        t.trap.oid = "1".repeat(300 * 1024);
+        publisher(client, metrics.clone()).publish(vec![t]).await;
+        assert_eq!(rule.num_calls(), 0);
+        let text = metrics.encode().unwrap();
+        assert!(
+            text.contains("trapbridge_events_failed_total{error_code=\"TooLarge\"} 1\n"),
+            "{text}"
+        );
     }
 
     #[test]
@@ -307,6 +396,6 @@ mod tests {
         let client = aws_smithy_mocks::mock_client!(aws_sdk_eventbridge, [&rule]);
         let mut t = trap(0);
         t.trap.oid = "1".repeat(300 * 1024);
-        assert!(publisher(client).entry(&t).is_err());
+        assert!(publisher(client, Default::default()).entry(&t).is_err());
     }
 }

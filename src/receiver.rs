@@ -33,16 +33,14 @@ impl Decoder {
         match crate::usm::message_version(bytes)? {
             0 | 1 => self.decode_community(bytes, peer),
             3 => self.decode_usm(bytes, peer),
-            v => Err(crate::Error::Protocol(format!(
-                "unsupported SNMP version {v}"
-            ))),
+            v => Err(crate::Error::Unsupported(format!("SNMP version {v}"))),
         }
     }
 
     fn decode_community(&self, bytes: &[u8], peer: std::net::SocketAddr) -> crate::Result<Decoded> {
         let pdu = snmp2::Pdu::from_bytes(bytes)?;
         if !self.communities.is_empty() && !self.communities.contains(pdu.community) {
-            return Err(crate::Error::Protocol("community not accepted".to_owned()));
+            return Err(crate::Error::CommunityRejected);
         }
         let trap = crate::trap::Trap::from_pdu(&pdu, peer, &self.mib, None)?;
         let reply = if pdu.message_type == snmp2::MessageType::InformRequest {
@@ -59,9 +57,7 @@ impl Decoder {
         let header = crate::usm::Header::parse(bytes)?;
         let trap = self.usm.decode(&header, bytes, |pdu| {
             if pdu.message_type == snmp2::MessageType::InformRequest {
-                return Err(crate::Error::Protocol(
-                    "SNMPv3 InformRequest is not supported".to_owned(),
-                ));
+                return Err(crate::Error::Unsupported("SNMPv3 InformRequest".to_owned()));
             }
             crate::trap::Trap::from_pdu(&pdu, peer, &self.mib, Some(&header))
         })?;
@@ -83,6 +79,7 @@ pub async fn run(
     socket: tokio::net::UdpSocket,
     decoder: std::sync::Arc<Decoder>,
     tx: tokio::sync::mpsc::Sender<crate::trap::Trap>,
+    metrics: std::sync::Arc<crate::metrics::Metrics>,
 ) -> crate::Result<()> {
     let mut buf = vec![0u8; 65535];
     loop {
@@ -90,6 +87,7 @@ pub async fn run(
         let decoded = match decoder.decode(&buf[..len], peer) {
             Ok(d) => d,
             Err(e) => {
+                metrics.dropped(e.drop_reason());
                 tracing::warn!(peer = %peer, error = %e, "dropping SNMP message");
                 continue;
             }
@@ -99,6 +97,7 @@ pub async fn run(
         {
             tracing::warn!(peer = %peer, error = %e, "failed to acknowledge inform");
         }
+        metrics.received(&decoded.trap);
         tracing::debug!(
             peer = %peer,
             trap = decoded.trap.trap.name.as_deref().unwrap_or(&decoded.trap.trap.oid),
@@ -107,5 +106,46 @@ pub async fn run(
         if tx.send(decoded.trap).await.is_err() {
             return Ok(());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    fn fixture(name: &str) -> Vec<u8> {
+        let path = format!("{}/tests/fixtures/{name}.hex", env!("CARGO_MANIFEST_DIR"));
+        hex::decode(std::fs::read_to_string(path).unwrap().trim()).unwrap()
+    }
+
+    #[tokio::test]
+    async fn run_counts_received_and_dropped_messages() {
+        let socket = crate::receiver::bind("127.0.0.1:0".parse().unwrap())
+            .await
+            .unwrap();
+        let addr = socket.local_addr().unwrap();
+        let decoder = std::sync::Arc::new(crate::receiver::Decoder::new(
+            ["public".to_owned()],
+            Default::default(),
+            Default::default(),
+        ));
+        let metrics = std::sync::Arc::new(crate::metrics::Metrics::new());
+        let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+        let task = tokio::spawn(crate::receiver::run(socket, decoder, tx, metrics.clone()));
+
+        let sender = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        sender.send_to(b"\x30\x03\x02\x01", addr).await.unwrap();
+        sender.send_to(&fixture("v2c_trap"), addr).await.unwrap();
+        let trap = rx.recv().await.unwrap();
+        assert_eq!(trap.version, crate::trap::Version::V2c);
+        task.abort();
+
+        let text = metrics.encode().unwrap();
+        assert!(
+            text.contains("trapbridge_received_total{version=\"v2c\",pdu_type=\"trap\"} 1\n"),
+            "{text}"
+        );
+        assert!(
+            text.contains("trapbridge_dropped_total{reason=\"parse\"} 1\n"),
+            "{text}"
+        );
     }
 }

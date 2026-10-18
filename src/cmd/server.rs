@@ -45,6 +45,9 @@ pub struct ServerArgs {
     /// Print events to stdout as JSON lines instead of sending them.
     #[arg(long, env = "TRAPBRIDGE_DRY_RUN")]
     pub dry_run: bool,
+    /// TCP address for the HTTP listener serving /healthz and /metrics.
+    #[arg(long, env = "TRAPBRIDGE_HTTP_LISTEN")]
+    pub http_listen: Option<std::net::SocketAddr>,
 }
 
 #[tokio::main]
@@ -70,9 +73,10 @@ pub async fn run(args: &ServerArgs) -> Result<(), anyhow::Error> {
         "starting trapbridge"
     );
     let decoder = std::sync::Arc::new(crate::receiver::Decoder::new(communities, usm, mib));
+    let metrics = std::sync::Arc::new(crate::metrics::Metrics::new());
 
     let publisher = if args.dry_run {
-        crate::publisher::Publisher::Stdout
+        crate::publisher::Publisher::Stdout(metrics.clone())
     } else {
         let sdk_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
         crate::publisher::Publisher::EventBridge(crate::publisher::EventBridgePublisher::new(
@@ -80,6 +84,7 @@ pub async fn run(args: &ServerArgs) -> Result<(), anyhow::Error> {
             args.event_bus.clone().expect("required by clap"),
             args.event_source.clone(),
             args.detail_type.clone(),
+            metrics.clone(),
         ))
     };
 
@@ -87,7 +92,16 @@ pub async fn run(args: &ServerArgs) -> Result<(), anyhow::Error> {
     let mut listeners = tokio::task::JoinSet::new();
     for addr in &args.listen {
         let socket = crate::receiver::bind(*addr).await?;
-        listeners.spawn(crate::receiver::run(socket, decoder.clone(), tx.clone()));
+        listeners.spawn(crate::receiver::run(
+            socket,
+            decoder.clone(),
+            tx.clone(),
+            metrics.clone(),
+        ));
+    }
+    if let Some(addr) = args.http_listen {
+        let listener = crate::http::bind(addr).await?;
+        listeners.spawn(crate::http::serve(listener, metrics.clone()));
     }
     drop(tx);
     let publisher_task = tokio::spawn(async move { publisher.run(rx).await });

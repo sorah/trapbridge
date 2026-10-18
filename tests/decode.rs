@@ -87,6 +87,10 @@ fn v2c_community_must_be_accepted() {
         .decode(&fixture("v2c_trap"), peer())
         .unwrap_err();
     assert!(err.to_string().contains("community"), "{err}");
+    assert_eq!(
+        err.drop_reason(),
+        trapbridge::metrics::DropReason::Community
+    );
 }
 
 #[test]
@@ -143,6 +147,7 @@ fn v3_wrong_password_is_rejected() {
     .decode(&fixture("v3_authpriv_trap"), peer())
     .unwrap_err();
     assert!(err.to_string().contains("HMAC"), "{err}");
+    assert_eq!(err.drop_reason(), trapbridge::metrics::DropReason::Usm);
 }
 
 #[test]
@@ -151,13 +156,24 @@ fn v3_unknown_user_is_rejected() {
         .decode(&fixture("v3_authpriv_trap"), peer())
         .unwrap_err();
     assert!(err.to_string().contains("unknown SNMPv3 user"), "{err}");
+    assert_eq!(err.drop_reason(), trapbridge::metrics::DropReason::Usm);
 }
 
 #[test]
 fn garbage_is_rejected() {
-    assert!(
-        decoder(&[], Default::default())
-            .decode(b"\x30\x03\x02\x01", peer())
-            .is_err()
+    let err = decoder(&[], Default::default())
+        .decode(b"\x30\x03\x02\x01", peer())
+        .unwrap_err();
+    assert_eq!(err.drop_reason(), trapbridge::metrics::DropReason::Parse);
+}
+
+#[test]
+fn unknown_snmp_version_is_unsupported() {
+    let err = decoder(&[], Default::default())
+        .decode(b"\x30\x03\x02\x01\x02", peer())
+        .unwrap_err();
+    assert_eq!(
+        err.drop_reason(),
+        trapbridge::metrics::DropReason::Unsupported
     );
 }

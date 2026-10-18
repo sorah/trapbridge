@@ -11,6 +11,7 @@ OIDs are named from MIB data dumped to JSON ahead of time, so the daemon itself 
 - SNMPv1 traps are translated to `snmpTrapOID` per RFC 3584, so v1 and v2c `linkDown` look the same to a rule
 - Batched `PutEvents` with one retry of failed entries
 - `--dry-run` prints events to stdout instead of sending them
+- Optional HTTP listener with `/healthz` and Prometheus `/metrics`
 
 ## Installation
 
@@ -127,6 +128,7 @@ Replace `--dry-run` with `--event-bus NAME_OR_ARN` to send the events to EventBr
 | `--community` | `TRAPBRIDGE_COMMUNITIES` | none | Accepted v1/v2c communities. Any community is accepted when none is set here or in `--config` |
 | `--config` | `TRAPBRIDGE_CONFIG` | none | JSON configuration file, below |
 | `--dry-run` | `TRAPBRIDGE_DRY_RUN` | off | Print events to stdout as JSON lines |
+| `--http-listen` | `TRAPBRIDGE_HTTP_LISTEN` | none (disabled) | TCP address for `/healthz` and `/metrics`, e.g. `0.0.0.0:9162` |
 | `--log-json` | `TRAPBRIDGE_LOG_JSON` | off | JSON logs on stderr |
 
 Log verbosity is set by `TRAPBRIDGE_LOG` or `RUST_LOG` (default `info`). Use `debug` to log every received trap.
@@ -159,6 +161,17 @@ Log verbosity is set by `TRAPBRIDGE_LOG` or `RUST_LOG` (default `info`). Use `de
 - `key_extension` (`blumenthal` or `reeder`) is needed when AES-192/256 is combined with an auth protocol whose digest is too short for the key.
 
 See [config.sample.json](./config.sample.json).
+
+### Metrics
+
+With `--http-listen`, `GET /healthz` returns `ok` and `GET /metrics` returns counters in OpenMetrics text format:
+
+| Metric | Labels | |
+|---|---|---|
+| `trapbridge_received_total` | `version`, `pdu_type` | Messages decoded into an event |
+| `trapbridge_dropped_total` | `reason`: `parse`, `community`, `usm`, `unsupported` | Messages dropped before becoming an event |
+| `trapbridge_events_put_total` | | Events accepted by `PutEvents`, or printed in `--dry-run` |
+| `trapbridge_events_failed_total` | `error_code` | Events that failed after the retry (EventBridge error code), or were dropped as `TooLarge` or `Serialize` |
 
 ### IAM policy
 
@@ -237,6 +250,7 @@ hk check --all --slow       # rustfmt, clippy, actionlint, zizmor (tools via mis
 - snmp2 with the `crypto-rust` feature for decoding. The `mibs` feature (opt-in) adds snmp2's `mibs` feature, which provides net-snmp initialization, and direct net-snmp FFI for walking the MIB tree.
 - clap derive with `env` for configuration. Options too complex for flags are loaded from JSON files with serde_json.
 - tracing and tracing-subscriber for logging
+- axum and prometheus-client for the HTTP listener and metrics
 - The MIB-to-JSON dump follows [snmp_exporter's generator](https://github.com/prometheus/snmp_exporter/tree/main/generator), keeping MIB handling out of the container image.
 
 ## Contributing

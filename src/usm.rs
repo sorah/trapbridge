@@ -39,9 +39,7 @@ impl Header {
             .unwrap_or_default();
         let model = global.read_asn_integer()?;
         if model != 3 {
-            return Err(crate::Error::Protocol(format!(
-                "unsupported security model {model}"
-            )));
+            return Err(crate::Error::Unsupported(format!("security model {model}")));
         }
         let params = rdr.read_asn_octetstring()?;
         let params = snmp2::AsnReader::from_bytes(params).read_raw(snmp2::asn1::TYPE_SEQUENCE)?;
@@ -113,14 +111,14 @@ impl SecurityStore {
             return Self::decode_with(security, bytes, f);
         }
         let Some(template) = self.templates.get(&header.username) else {
-            return Err(crate::Error::Protocol(format!(
+            return Err(crate::Error::Usm(format!(
                 "unknown SNMPv3 user {:?} for engine ID {}",
                 String::from_utf8_lossy(&header.username),
                 hex::encode(&header.engine_id)
             )));
         };
         if header.engine_id.is_empty() {
-            return Err(crate::Error::Protocol(
+            return Err(crate::Error::Usm(
                 "SNMPv3 message without an engine ID".to_owned(),
             ));
         }
