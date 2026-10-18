@@ -221,16 +221,21 @@ impl MibTree {
                     .map(|(oid, _)| oid.clone()),
             );
         } else {
-            for root in &config.include {
-                let root = self
-                    .lookup(root)
-                    .ok_or_else(|| crate::Error::Mib(format!("include {root:?} not found")))?;
-                selected.extend(
-                    self.nodes
-                        .range(root.clone()..)
-                        .take_while(|(oid, _)| oid.starts_with(&root))
-                        .map(|(oid, _)| oid.clone()),
-                );
+            for name in &config.include {
+                // A numeric root may have no node of its own, such as an SMIv1 enterprise.0.
+                let root = crate::mib::parse_oid(name)
+                    .or_else(|| self.lookup(name))
+                    .ok_or_else(|| crate::Error::Mib(format!("include {name:?} not found")))?;
+                let subtree = self
+                    .nodes
+                    .range(root.clone()..)
+                    .take_while(|(oid, _)| oid.starts_with(&root))
+                    .map(|(oid, _)| oid.clone())
+                    .collect::<Vec<_>>();
+                if subtree.is_empty() {
+                    return Err(crate::Error::Mib(format!("include {name:?} not found")));
+                }
+                selected.extend(subtree);
             }
         }
 
@@ -513,6 +518,25 @@ mod tests {
     fn unknown_include_is_an_error() {
         let config = crate::mib_dump::MibDumpConfig {
             include: vec!["NOPE-MIB::nothing".to_owned()],
+            ..Default::default()
+        };
+        assert!(tree().export(&config).is_err());
+    }
+
+    #[test]
+    fn numeric_include_without_own_node_selects_subtree() {
+        let config = crate::mib_dump::MibDumpConfig {
+            include: vec!["1.3.6.1.6.3.1.1".to_owned()],
+            ..Default::default()
+        };
+        let out = tree().export(&config).unwrap();
+        assert!(out.nodes.contains_key("1.3.6.1.6.3.1.1.5"));
+    }
+
+    #[test]
+    fn numeric_include_with_empty_subtree_is_an_error() {
+        let config = crate::mib_dump::MibDumpConfig {
+            include: vec!["1.3.6.1.4.1.99999".to_owned()],
             ..Default::default()
         };
         assert!(tree().export(&config).is_err());

@@ -22,4 +22,12 @@ fn smiv1_traps_are_exported_as_traps() {
         trapbridge::mib::NodeType::TrapType
     );
     assert!(!out.nodes.contains_key("1.3.6.1.4.1.99999.0"));
+
+    let config = trapbridge::mib_dump::MibDumpConfig {
+        include: vec!["1.3.6.1.4.1.99999.0".to_owned()],
+        ..Default::default()
+    };
+    let out = tree.export(&config).unwrap();
+    assert!(out.nodes.contains_key("1.3.6.1.4.1.99999.0.1"));
+    assert!(out.nodes.contains_key("1.3.6.1.4.1.99999.0.2"));
 }
