@@ -129,6 +129,17 @@ impl MibTree {
 
     unsafe fn convert(t: &netsnmp_sys_nocrypto::Struct_tree) -> Option<RawNode> {
         let name = unsafe { cstr(t.label) }?;
+        let parent = if t.parent.is_null() {
+            None
+        } else {
+            let p = unsafe { &*t.parent };
+            unsafe { cstr(p.label) }.map(|label| (label, p._type))
+        };
+        let kind = node_kind(
+            &name,
+            t._type,
+            parent.as_ref().map(|(label, ty)| (label.as_str(), *ty)),
+        )?;
         let module = unsafe {
             let m = netsnmp_sys_nocrypto::find_module(t.modid);
             if m.is_null() { None } else { cstr((*m).name) }
@@ -166,7 +177,7 @@ impl MibTree {
             node: crate::mib::Node {
                 name,
                 module,
-                kind: node_type(t._type),
+                kind,
                 tc,
                 format,
                 hint: unsafe { cstr(t.hint) },
@@ -272,6 +283,26 @@ impl MibTree {
             }
         }
         Ok(out)
+    }
+}
+
+/// Kind of a tree node, or `None` for the `enterprise#` placeholder net-snmp
+/// synthesizes at `enterprise.0` for SMIv1 traps.
+/// net-snmp's `parse()` assigns TRAP-TYPE to that placeholder instead of the trap below it.
+fn node_kind(
+    label: &str,
+    raw_type: std::os::raw::c_int,
+    parent: Option<(&str, std::os::raw::c_int)>,
+) -> Option<crate::mib::NodeType> {
+    if label.ends_with('#') {
+        return None;
+    }
+    let kind = node_type(raw_type);
+    match parent {
+        Some((p, 20)) if kind == crate::mib::NodeType::Other && p.ends_with('#') => {
+            Some(crate::mib::NodeType::TrapType)
+        }
+        _ => Some(kind),
     }
 }
 
@@ -485,5 +516,29 @@ mod tests {
             ..Default::default()
         };
         assert!(tree().export(&config).is_err());
+    }
+
+    #[test]
+    fn node_kind_skips_smiv1_trap_placeholder() {
+        assert_eq!(
+            crate::mib_dump::node_kind("pico#", 20, Some(("pico", 1))),
+            None
+        );
+    }
+
+    #[test]
+    fn node_kind_marks_children_of_trap_placeholder_as_traps() {
+        assert_eq!(
+            crate::mib_dump::node_kind("picoTrap", 0, Some(("pico#", 20))),
+            Some(crate::mib::NodeType::TrapType)
+        );
+        assert_eq!(
+            crate::mib_dump::node_kind("other", 0, Some(("pico", 0))),
+            Some(crate::mib::NodeType::Other)
+        );
+        assert_eq!(
+            crate::mib_dump::node_kind("linkDown", 21, Some(("snmpTraps", 0))),
+            Some(crate::mib::NodeType::NotificationType)
+        );
     }
 }

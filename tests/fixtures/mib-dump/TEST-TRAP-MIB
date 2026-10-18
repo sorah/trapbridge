@@ -1,0 +1,25 @@
+TEST-TRAP-MIB DEFINITIONS ::= BEGIN
+
+testEnt OBJECT IDENTIFIER ::= { iso 3 6 1 4 1 99999 }
+
+testTraps OBJECT IDENTIFIER ::= { testEnt 0 }
+
+testCount OBJECT-TYPE
+    SYNTAX INTEGER
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION "x"
+    ::= { testEnt 1 }
+
+testTrapA TRAP-TYPE
+    ENTERPRISE testEnt
+    VARIABLES { testCount }
+    DESCRIPTION "a"
+    ::= 1
+
+testTrapB TRAP-TYPE
+    ENTERPRISE testEnt
+    DESCRIPTION "b"
+    ::= 2
+
+END
