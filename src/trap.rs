@@ -46,6 +46,9 @@ pub enum PduType {
 pub struct Source {
     pub address: std::net::IpAddr,
     pub port: u16,
+    /// Reverse DNS name of `address`, when resolution is enabled and succeeds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hostname: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -194,6 +197,7 @@ impl Trap {
             source: Source {
                 address: peer.ip().to_canonical(),
                 port: peer.port(),
+                hostname: None,
             },
             pdu_type,
             request_id: (version != Version::V1).then_some(pdu.req_id),

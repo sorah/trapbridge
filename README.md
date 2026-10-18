@@ -127,6 +127,9 @@ Replace `--dry-run` with `--event-bus NAME_OR_ARN` to send the events to EventBr
 | `--mib-json` | `TRAPBRIDGE_MIB_JSON` | none | `mib-dump` outputs, repeatable or comma-separated. Later files win on duplicate OIDs |
 | `--community` | `TRAPBRIDGE_COMMUNITIES` | none | Accepted v1/v2c communities. Any community is accepted when none is set here or in `--config` |
 | `--config` | `TRAPBRIDGE_CONFIG` | none | JSON configuration file, below |
+| `--resolve-source` | `TRAPBRIDGE_RESOLVE_SOURCE` | off | Add the sender's reverse DNS name as `source.hostname` (honours record TTLs) |
+| `--resolve-source-timeout` | `TRAPBRIDGE_RESOLVE_SOURCE_TIMEOUT` | `2` | Timeout of one lookup, in seconds |
+| `--resolve-source-max-ttl` | `TRAPBRIDGE_RESOLVE_SOURCE_MAX_TTL` | `300` | Maximum seconds to cache an answer; shorter record TTLs win |
 | `--dry-run` | `TRAPBRIDGE_DRY_RUN` | off | Print events to stdout as JSON lines |
 | `--http-listen` | `TRAPBRIDGE_HTTP_LISTEN` | none (disabled) | TCP address for `/healthz` and `/metrics`, e.g. `0.0.0.0:9162` |
 | `--log-json` | `TRAPBRIDGE_LOG_JSON` | off | JSON logs on stderr |
@@ -195,7 +198,7 @@ Each trap becomes one event. The event time is when the trap was received; the t
 | Field | |
 |---|---|
 | `version` | `v1`, `v2c` or `v3` |
-| `source` | Sender address and port, as seen by trapbridge |
+| `source` | Sender `address` and `port` as seen by trapbridge, plus `hostname` (reverse DNS) with `--resolve-source` when resolvable |
 | `pdu_type` | `trap` or `inform` |
 | `request_id` | PDU request-id (absent for v1) |
 | `uptime` | `sysUpTime.0`, or the v1 time-stamp, in hundredths of a second |

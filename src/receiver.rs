@@ -80,6 +80,7 @@ pub async fn run(
     decoder: std::sync::Arc<Decoder>,
     tx: tokio::sync::mpsc::Sender<crate::trap::Trap>,
     metrics: std::sync::Arc<crate::metrics::Metrics>,
+    reverse_dns: Option<std::sync::Arc<crate::reverse_dns::ReverseDns>>,
 ) -> crate::Result<()> {
     let mut buf = vec![0u8; 65535];
     loop {
@@ -103,8 +104,23 @@ pub async fn run(
             trap = decoded.trap.trap.name.as_deref().unwrap_or(&decoded.trap.trap.oid),
             "received trap"
         );
-        if tx.send(decoded.trap).await.is_err() {
-            return Ok(());
+        match &reverse_dns {
+            Some(dns) => {
+                // Lookups run off the receive loop so a slow resolver cannot stall the socket.
+                let (dns, task_tx, mut trap) = (dns.clone(), tx.clone(), decoded.trap);
+                tokio::spawn(async move {
+                    trap.source.hostname = dns.lookup(trap.source.address).await;
+                    let _ = task_tx.send(trap).await;
+                });
+                if tx.is_closed() {
+                    return Ok(());
+                }
+            }
+            None => {
+                if tx.send(decoded.trap).await.is_err() {
+                    return Ok(());
+                }
+            }
         }
     }
 }
@@ -129,7 +145,7 @@ mod tests {
         ));
         let metrics = std::sync::Arc::new(crate::metrics::Metrics::new());
         let (tx, mut rx) = tokio::sync::mpsc::channel(1);
-        let task = tokio::spawn(crate::receiver::run(socket, decoder, tx, metrics.clone()));
+        let task = tokio::spawn(crate::receiver::run(socket, decoder, tx, metrics.clone(), None));
 
         let sender = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
         sender.send_to(b"\x30\x03\x02\x01", addr).await.unwrap();

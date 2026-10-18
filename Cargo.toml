@@ -24,6 +24,7 @@ aws-sdk-eventbridge = "1"
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
 clap = { version = "4", features = ["derive", "env"] }
 hex = "0.4"
+hickory-resolver = { version = "0.26.3", default-features = false, features = ["system-config", "tokio"] }
 libc = { version = "0.2", optional = true }
 netsnmp-sys-nocrypto = { version = "0.1", optional = true }
 prometheus-client = "0.25"

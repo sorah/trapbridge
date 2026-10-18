@@ -239,6 +239,7 @@ mod tests {
             source: crate::trap::Source {
                 address: "192.0.2.1".parse().unwrap(),
                 port: 162,
+                hostname: None,
             },
             pdu_type: crate::trap::PduType::Trap,
             request_id: Some(1),

@@ -42,6 +42,25 @@ pub struct ServerArgs {
     /// Event `detail-type`.
     #[arg(long, env = "TRAPBRIDGE_DETAIL_TYPE", default_value = "SNMP Trap")]
     pub detail_type: String,
+    /// Add the reverse DNS name of the sender to `detail.source.hostname`.
+    #[arg(long, env = "TRAPBRIDGE_RESOLVE_SOURCE")]
+    pub resolve_source: bool,
+    /// Timeout of one reverse DNS lookup, in seconds.
+    #[arg(
+        long,
+        env = "TRAPBRIDGE_RESOLVE_SOURCE_TIMEOUT",
+        default_value_t = 2,
+        requires = "resolve_source"
+    )]
+    pub resolve_source_timeout: u64,
+    /// Upper bound of how long a reverse DNS answer is cached, in seconds. Shorter record TTLs win.
+    #[arg(
+        long,
+        env = "TRAPBRIDGE_RESOLVE_SOURCE_MAX_TTL",
+        default_value_t = 300,
+        requires = "resolve_source"
+    )]
+    pub resolve_source_max_ttl: u64,
     /// Print events to stdout as JSON lines instead of sending them.
     #[arg(long, env = "TRAPBRIDGE_DRY_RUN")]
     pub dry_run: bool,
@@ -88,6 +107,15 @@ pub async fn run(args: &ServerArgs) -> Result<(), anyhow::Error> {
         ))
     };
 
+    let reverse_dns = if args.resolve_source {
+        Some(std::sync::Arc::new(crate::reverse_dns::ReverseDns::new(
+            std::time::Duration::from_secs(args.resolve_source_timeout),
+            std::time::Duration::from_secs(args.resolve_source_max_ttl),
+        )?))
+    } else {
+        None
+    };
+
     let (tx, rx) = tokio::sync::mpsc::channel(1024);
     let mut listeners = tokio::task::JoinSet::new();
     for addr in &args.listen {
@@ -97,6 +125,7 @@ pub async fn run(args: &ServerArgs) -> Result<(), anyhow::Error> {
             decoder.clone(),
             tx.clone(),
             metrics.clone(),
+            reverse_dns.clone(),
         ));
     }
     if let Some(addr) = args.http_listen {

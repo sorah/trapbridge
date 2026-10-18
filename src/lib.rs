@@ -11,6 +11,7 @@ pub mod mib;
 pub mod mib_dump;
 pub mod publisher;
 pub mod receiver;
+pub mod reverse_dns;
 pub mod telemetry;
 pub mod trap;
 pub mod usm;
