@@ -19,9 +19,9 @@ jobs:
         include:
           # Native runners per architecture; Rust builds under QEMU are too slow.
           - platform: linux/amd64
-            os: ubuntu-24.04
+            os: ubuntu-26.04
           - platform: linux/arm64
-            os: ubuntu-24.04-arm
+            os: ubuntu-26.04-arm
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     permissions:
@@ -75,7 +75,7 @@ jobs:
 
   merge:
     needs: [build]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
       contents: read

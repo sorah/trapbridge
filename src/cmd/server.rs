@@ -33,7 +33,11 @@ pub struct ServerArgs {
     )]
     pub event_bus: Option<String>,
     /// Event `source`.
-    #[arg(long, env = "TRAPBRIDGE_EVENT_SOURCE", default_value = "trapbridge.0w0.co")]
+    #[arg(
+        long,
+        env = "TRAPBRIDGE_EVENT_SOURCE",
+        default_value = "trapbridge.0w0.co"
+    )]
     pub event_source: String,
     /// Event `detail-type`.
     #[arg(long, env = "TRAPBRIDGE_DETAIL_TYPE", default_value = "SNMP Trap")]

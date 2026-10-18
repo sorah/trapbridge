@@ -15,7 +15,7 @@ jobs:
 
   create-release:
     needs: [test]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       contents: write
@@ -43,9 +43,9 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-musl
-            os: ubuntu-24.04
+            os: ubuntu-26.04
           - target: aarch64-unknown-linux-musl
-            os: ubuntu-24.04-arm
+            os: ubuntu-26.04-arm
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     permissions:
@@ -86,7 +86,7 @@ jobs:
 
   publish-crate:
     needs: [build-binaries, docker]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     environment:
       name: crates-io

@@ -9,7 +9,7 @@ permissions: {}
 
 jobs:
   lint:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -31,7 +31,7 @@ jobs:
       fail-fast: false
       matrix:
         # aws-lc-sys makes musl cross-builds heavy; test on native gnu targets instead.
-        os: [ubuntu-24.04, ubuntu-24.04-arm]
+        os: [ubuntu-26.04, ubuntu-26.04-arm]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     permissions:
