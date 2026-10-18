@@ -1,0 +1,101 @@
+{
+  "nodes": {
+    "1.3.6.1.2.1.2.2.1.1": {
+      "name": "ifIndex",
+      "module": "IF-MIB",
+      "type": "INTEGER32",
+      "tc": "InterfaceIndex",
+      "hint": "d"
+    },
+    "1.3.6.1.2.1.2.2.1.6": {
+      "name": "ifPhysAddress",
+      "module": "IF-MIB",
+      "type": "OCTET_STRING",
+      "tc": "PhysAddress",
+      "format": "PhysAddress48",
+      "hint": "1x:"
+    },
+    "1.3.6.1.2.1.2.2.1.7": {
+      "name": "ifAdminStatus",
+      "module": "IF-MIB",
+      "type": "INTEGER",
+      "enums": {
+        "1": "up",
+        "2": "down",
+        "3": "testing"
+      }
+    },
+    "1.3.6.1.2.1.2.2.1.8": {
+      "name": "ifOperStatus",
+      "module": "IF-MIB",
+      "type": "INTEGER",
+      "enums": {
+        "1": "up",
+        "2": "down",
+        "3": "testing",
+        "4": "unknown",
+        "5": "dormant",
+        "6": "notPresent",
+        "7": "lowerLayerDown"
+      }
+    },
+    "1.3.6.1.2.1.25.1.2": {
+      "name": "hrSystemDate",
+      "module": "HOST-RESOURCES-MIB",
+      "type": "OCTET_STRING",
+      "tc": "DateAndTime",
+      "format": "DateAndTime",
+      "hint": "2d-1d-1d,1d:1d:1d.1d,1a1d:1d"
+    },
+    "1.3.6.1.2.1.31.1.1.1.16": {
+      "name": "ifPromiscuousMode",
+      "module": "IF-MIB",
+      "type": "INTEGER",
+      "tc": "TruthValue",
+      "enums": {
+        "1": "true",
+        "2": "false"
+      }
+    },
+    "1.3.6.1.6.3.1.1.5": {
+      "name": "snmpTraps",
+      "module": "SNMPv2-MIB",
+      "type": "OTHER"
+    },
+    "1.3.6.1.6.3.1.1.5.1": {
+      "name": "coldStart",
+      "module": "SNMPv2-MIB",
+      "type": "NOTIFICATION_TYPE"
+    },
+    "1.3.6.1.6.3.1.1.5.2": {
+      "name": "warmStart",
+      "module": "SNMPv2-MIB",
+      "type": "NOTIFICATION_TYPE"
+    },
+    "1.3.6.1.6.3.1.1.5.3": {
+      "name": "linkDown",
+      "module": "IF-MIB",
+      "type": "NOTIFICATION_TYPE",
+      "objects": [
+        "1.3.6.1.2.1.2.2.1.1",
+        "1.3.6.1.2.1.2.2.1.7",
+        "1.3.6.1.2.1.2.2.1.8"
+      ]
+    },
+    "1.3.6.1.6.3.1.1.5.4": {
+      "name": "linkUp",
+      "module": "IF-MIB",
+      "type": "NOTIFICATION_TYPE",
+      "objects": [
+        "1.3.6.1.2.1.2.2.1.1",
+        "1.3.6.1.2.1.2.2.1.7",
+        "1.3.6.1.2.1.2.2.1.8"
+      ]
+    },
+    "1.3.6.1.6.3.1.1.5.5": {
+      "name": "authenticationFailure",
+      "module": "SNMPv2-MIB",
+      "type": "NOTIFICATION_TYPE"
+    }
+  }
+}

@@ -1,0 +1,43 @@
+[package]
+name = "trapbridge"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+description = "Receive SNMP traps and forward them to AWS EventBridge"
+authors = ["Sorah Fukumori <her@sorah.jp>"]
+homepage = "https://github.com/sorah/trapbridge"
+repository = "https://github.com/sorah/trapbridge"
+license = "MIT"
+readme = "README.md"
+keywords = ["snmp", "trap", "eventbridge", "aws"]
+categories = ["command-line-utilities", "network-programming"]
+include = ["/src", "/tests", "/LICENSE", "/README.md", "/*.sample.json"]
+
+[features]
+default = []
+mibs = ["snmp2/mibs", "dep:netsnmp-sys-nocrypto", "dep:libc"]
+
+[dependencies]
+anyhow = "1"
+aws-config = { version = "1", features = ["behavior-version-latest"] }
+aws-sdk-eventbridge = "1"
+clap = { version = "4", features = ["derive", "env"] }
+hex = "0.4"
+libc = { version = "0.2", optional = true }
+netsnmp-sys-nocrypto = { version = "0.1", optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+snmp2 = { version = "0.5", default-features = false, features = ["crypto-rust"] }
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+[dev-dependencies]
+aws-sdk-eventbridge = { version = "1", features = ["test-util"] }
+aws-smithy-mocks = "0.2"
+snmp2 = { version = "0.5", default-features = false, features = ["crypto-rust"] }
+
+[profile.release]
+lto = "thin"
+strip = true

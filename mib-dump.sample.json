@@ -1,0 +1,15 @@
+{
+  "mib_dirs": ["/usr/share/snmp/mibs"],
+  "modules": ["SNMPv2-MIB", "IF-MIB", "HOST-RESOURCES-MIB"],
+  "include": [
+    "SNMPv2-MIB::snmpTraps",
+    "IF-MIB::linkDown",
+    "IF-MIB::linkUp",
+    "IF-MIB::ifPhysAddress",
+    "HOST-RESOURCES-MIB::hrSystemDate"
+  ],
+  "overrides": {
+    "IF-MIB::ifPhysAddress": { "type": "PhysAddress48" },
+    "IF-MIB::ifAdminStatus": { "name": "ifAdminState" }
+  }
+}

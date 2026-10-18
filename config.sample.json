@@ -1,0 +1,20 @@
+{
+  "communities": ["public"],
+  "v3_users": [
+    {
+      "username": "switch01",
+      "engine_id": "80001f8880aabbccdd",
+      "auth_protocol": "sha256",
+      "auth_password": "change-me-auth",
+      "priv_protocol": "aes128",
+      "priv_password": "change-me-priv"
+    },
+    {
+      "username": "fleet",
+      "auth_protocol": "sha1",
+      "auth_password": "change-me-auth",
+      "priv_protocol": "aes128",
+      "priv_password": "change-me-priv"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_test.yml # zizmor: ignore[self-repository]
+
+  docker:
+    needs: [test]
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    uses: ./.github/workflows/_docker.yml # zizmor: ignore[self-repository]
+    with:
+      cache: true

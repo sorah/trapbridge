@@ -1,0 +1,6 @@
+[tools]
+"aqua:jdx/hk" = "1.53.0"
+"aqua:apple/pkl" = "0.31.1"
+"aqua:rhysd/actionlint" = "1.7.12"
+"aqua:suzuki-shunsuke/pinact" = "latest"
+"aqua:zizmorcore/zizmor" = "1.30.1"

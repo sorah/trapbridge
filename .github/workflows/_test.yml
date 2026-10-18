@@ -1,0 +1,58 @@
+name: test
+
+# The checks hk check --all --slow and cargo test --all-features run locally. No secrets required.
+
+on:
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7 # v5.2.0
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master (2026-10-16)
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+      # clippy builds with default features only; the mibs feature is covered by the test job.
+      - run: hk check --all --slow
+
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # aws-lc-sys makes musl cross-builds heavy; test on native gnu targets instead.
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # libsnmp-dev is needed only by the mibs feature (mib-dump).
+      - run: sudo apt-get install -y libsnmp-dev || (sudo apt-get update && sudo apt-get install -y libsnmp-dev)
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master (2026-10-16)
+        with:
+          toolchain: stable
+          components: clippy
+      - run: cargo test --locked --all-features
+      - run: cargo clippy --locked --all-targets --all-features -- -D warnings
+      - name: Check the default build does not link net-snmp
+        run: |
+          set -euxo pipefail
+          cargo build --locked
+          if ldd target/debug/trapbridge | grep -q netsnmp; then
+            echo "::error::default build links libnetsnmp"
+            exit 1
+          fi
