@@ -43,22 +43,27 @@ pub struct ServerArgs {
     #[arg(long, env = "TRAPBRIDGE_DETAIL_TYPE", default_value = "SNMP Trap")]
     pub detail_type: String,
     /// Add the reverse DNS name of the sender to `detail.source.hostname`.
-    #[arg(long, env = "TRAPBRIDGE_RESOLVE_SOURCE")]
+    #[arg(
+        long,
+        env = "TRAPBRIDGE_RESOLVE_SOURCE",
+        action = clap::ArgAction::Set,
+        num_args = 0..=1,
+        default_value_t = true,
+        default_missing_value = "true"
+    )]
     pub resolve_source: bool,
     /// Timeout of one reverse DNS lookup, in seconds.
     #[arg(
         long,
         env = "TRAPBRIDGE_RESOLVE_SOURCE_TIMEOUT",
-        default_value_t = 2,
-        requires = "resolve_source"
+        default_value_t = 2
     )]
     pub resolve_source_timeout: u64,
     /// Upper bound of how long a reverse DNS answer is cached, in seconds. Shorter record TTLs win.
     #[arg(
         long,
         env = "TRAPBRIDGE_RESOLVE_SOURCE_MAX_TTL",
-        default_value_t = 300,
-        requires = "resolve_source"
+        default_value_t = 300
     )]
     pub resolve_source_max_ttl: u64,
     /// Print events to stdout as JSON lines instead of sending them.
