@@ -53,18 +53,10 @@ pub struct ServerArgs {
     )]
     pub resolve_source: bool,
     /// Timeout of one reverse DNS lookup, in seconds.
-    #[arg(
-        long,
-        env = "TRAPBRIDGE_RESOLVE_SOURCE_TIMEOUT",
-        default_value_t = 2
-    )]
+    #[arg(long, env = "TRAPBRIDGE_RESOLVE_SOURCE_TIMEOUT", default_value_t = 2)]
     pub resolve_source_timeout: u64,
     /// Upper bound of how long a reverse DNS answer is cached, in seconds. Shorter record TTLs win.
-    #[arg(
-        long,
-        env = "TRAPBRIDGE_RESOLVE_SOURCE_MAX_TTL",
-        default_value_t = 300
-    )]
+    #[arg(long, env = "TRAPBRIDGE_RESOLVE_SOURCE_MAX_TTL", default_value_t = 300)]
     pub resolve_source_max_ttl: u64,
     /// Print events to stdout as JSON lines instead of sending them.
     #[arg(long, env = "TRAPBRIDGE_DRY_RUN")]

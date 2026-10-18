@@ -145,7 +145,13 @@ mod tests {
         ));
         let metrics = std::sync::Arc::new(crate::metrics::Metrics::new());
         let (tx, mut rx) = tokio::sync::mpsc::channel(1);
-        let task = tokio::spawn(crate::receiver::run(socket, decoder, tx, metrics.clone(), None));
+        let task = tokio::spawn(crate::receiver::run(
+            socket,
+            decoder,
+            tx,
+            metrics.clone(),
+            None,
+        ));
 
         let sender = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
         sender.send_to(b"\x30\x03\x02\x01", addr).await.unwrap();

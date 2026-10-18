@@ -31,12 +31,15 @@ impl ReverseDns {
     /// Failures and timeouts yield `None`.
     pub async fn lookup(&self, addr: std::net::IpAddr) -> Option<String> {
         match self.resolver.reverse_lookup(addr).await {
-            Ok(lookup) => lookup.answers().iter().find_map(|record| match &record.data {
-                hickory_resolver::proto::rr::RData::PTR(ptr) => {
-                    Some(ptr.0.to_utf8().trim_end_matches('.').to_owned())
-                }
-                _ => None,
-            }),
+            Ok(lookup) => lookup
+                .answers()
+                .iter()
+                .find_map(|record| match &record.data {
+                    hickory_resolver::proto::rr::RData::PTR(ptr) => {
+                        Some(ptr.0.to_utf8().trim_end_matches('.').to_owned())
+                    }
+                    _ => None,
+                }),
             Err(e) => {
                 tracing::debug!(%addr, error = %e, "reverse DNS lookup failed");
                 None
